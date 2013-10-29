@@ -1984,6 +1984,7 @@ angular.module( 'ui.bootstrap.tooltip', [ 'ui.bootstrap.position', 'ui.bootstrap
           'placement="'+startSym+'tt_placement'+endSym+'" '+
           'animation="tt_animation()" '+
           'is-open="tt_isOpen"'+
+          'compile-scope="$parent"'+
           '>'+
         '</'+ directiveName +'-popup>';
 
@@ -2103,7 +2104,7 @@ angular.module( 'ui.bootstrap.tooltip', [ 'ui.bootstrap.position', 'ui.bootstrap
           }
           
           // Hide the tooltip popup element.
-          function hide() {
+          function hide( destroy ) {
             // First things first: we don't show it anymore.
             scope.tt_isOpen = false;
 
@@ -2114,9 +2115,17 @@ angular.module( 'ui.bootstrap.tooltip', [ 'ui.bootstrap.position', 'ui.bootstrap
             // need to wait for it to expire beforehand.
             // FIXME: this is a placeholder for a port of the transitions library.
             if ( angular.isDefined( scope.tt_animation ) && scope.tt_animation() ) {
-              transitionTimeout = $timeout( function () { tooltip.remove(); }, 500 );
+              transitionTimeout = $timeout( function () { remove( destroy ); }, 500 );
             } else {
+              remove( destroy );
+            }
+          }
+
+          function remove( destroy ) {
+            if ( destroy ) {
               tooltip.remove();
+            } else {
+              angular.forEach( tooltip, function( e ) { e.parentNode.removeChild( e ); } );
             }
           }
 
@@ -2181,9 +2190,9 @@ angular.module( 'ui.bootstrap.tooltip', [ 'ui.bootstrap.position', 'ui.bootstrap
           // Make sure tooltip is destroyed and removed.
           scope.$on('$destroy', function onDestroyTooltip() {
             if ( scope.tt_isOpen ) {
-              hide();
+              hide( true );
             } else {
-              tooltip.remove();
+              remove( true );
             }
           });
         }
@@ -2234,8 +2243,29 @@ angular.module( 'ui.bootstrap.popover', [ 'ui.bootstrap.tooltip' ] )
 })
 .directive( 'popover', [ '$compile', '$timeout', '$parse', '$window', '$tooltip', function ( $compile, $timeout, $parse, $window, $tooltip ) {
   return $tooltip( 'popover', 'popover', 'click' );
+}])
+.directive( 'popoverTemplatePopup', [ '$http', '$templateCache', '$compile', function ( $http, $templateCache, $compile ) {
+  return {
+    restrict: 'EA',
+    replace: true,
+    scope: { title: '@', content: '@', placement: '@', animation: '&', isOpen: '&', compileScope: '&' },
+    templateUrl: 'template/popover/popover-template.html',
+    link: function( scope, iElement ) {
+      scope.$watch( 'content', function( templateUrl ) {
+        if ( !templateUrl ) { return; }
+        $http.get( templateUrl, { cache: $templateCache } )
+        .then( function( response ) {
+          var contentEl = angular.element( iElement[0].querySelector( '.popover-content' ) );
+          contentEl.children().remove();
+          contentEl.append( $compile( response.data.trim() )( scope.compileScope() ) );
+        });
+      });
+    }
+  };
+}])
+.directive( 'popoverTemplate', [ '$tooltip', function ( $tooltip ) {
+  return $tooltip( 'popoverTemplate', 'popover', 'click' );
 }]);
-
 
 angular.module('ui.bootstrap.progressbar', ['ui.bootstrap.transition'])
 
